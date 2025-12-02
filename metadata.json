@@ -1,0 +1,5 @@
+{
+  "name": "AuQuant - Gold Sentiment Engine",
+  "description": "A quantitative trading dashboard for Gold (XAU) that analyzes financial news and macro drivers to produce daily Buy/Sell/Hold signals using AI.",
+  "requestFramePermissions": []
+}
