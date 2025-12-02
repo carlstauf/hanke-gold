@@ -199,7 +199,7 @@ const App: React.FC = () => {
         {/* NEWS TAB (Simplified View) */}
         {activeTab === 'news' && (
            <div className="grid gap-4 max-w-4xl mx-auto relative z-10">
-              <LiveNewsFeed />
+              <LiveNewsFeed apiKey={apiKey} />
               
               <h3 className="text-slate-400 font-mono mb-2">TOP INFLUENCING ARTICLES (24H)</h3>
               {signalData.top_articles.map((article, i) => (
@@ -215,7 +215,9 @@ const App: React.FC = () => {
                         <span className="text-xs text-gold-500 font-mono uppercase tracking-wide">{article.source}</span>
                         <span className="text-xs text-slate-500">{article.timestamp}</span>
                       </div>
-                      <h4 className="text-lg font-medium text-slate-200 mb-2">{article.title}</h4>
+                      <a href={article.url} target="_blank" rel="noopener noreferrer" className="hover:text-gold-400 transition-colors">
+                        <h4 className="text-lg font-medium text-slate-200 mb-2">{article.title}</h4>
+                      </a>
                       <p className="text-sm text-slate-400 mb-3">{article.summary}</p>
                       <div className="flex gap-2">
                         {article.tags.map(tag => (

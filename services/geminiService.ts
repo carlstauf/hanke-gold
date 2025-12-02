@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { GoldSignal } from "../types";
+import { GoldSignal, NewsArticle } from "../types";
 
 // This prompts the LLM to act as the "Sentiment Engine" described in the python prompt.
 const ANALYSIS_SYSTEM_INSTRUCTION = `
@@ -97,6 +97,67 @@ export const analyzeHeadlinesWithGemini = async (headlines: string[], apiKey: st
 
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
+    throw error;
+  }
+};
+
+export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> => {
+  if (!apiKey) throw new Error("API Key required");
+
+  const ai = new GoogleGenAI({ apiKey });
+  
+  // We use googleSearch to get real data. We cannot use JSON responseMimeType with search tools easily in the same call 
+  // without losing grounding chunks sometimes, so we parse text manually for better reliability with tools.
+  const prompt = `
+    Find 6 very recent real-time financial news headlines (from the last 24 hours) about Gold (XAU), US Inflation, Fed Policy, or Geopolitics.
+    
+    For each article, strictly follow this single-line format:
+    TITLE ||| SOURCE ||| SUMMARY ||| IMPACT_SCORE
+    
+    IMPACT_SCORE is a float between -1.0 (Bearish for Gold) and 1.0 (Bullish for Gold).
+    Do not use markdown formatting or bullet points. Just the raw lines separated by newlines.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      }
+    });
+
+    const text = response.text || "";
+    const lines = text.split('\n').filter(l => l.includes('|||'));
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+    const articles: NewsArticle[] = lines.map((line, i) => {
+      const [title, source, summary, scoreStr] = line.split('|||').map(s => s.trim());
+      
+      // Try to find a URL from grounding chunks. 
+      // Chunks are usually ordered by relevance or citation. We map index i if available, else fallback.
+      let url = chunks[i]?.web?.uri;
+      
+      if (!url) {
+        // Fallback: Google Search Link
+        url = `https://www.google.com/search?q=${encodeURIComponent(title + " " + source)}`;
+      }
+
+      return {
+        id: `real-${Date.now()}-${i}`,
+        title: title || "News Alert",
+        source: source || "Market Wire",
+        summary: summary || "Details currently unavailable.",
+        impact_score: parseFloat(scoreStr) || 0,
+        timestamp: "Today",
+        url: url,
+        tags: ["Live", "Real-Time"]
+      };
+    });
+
+    return articles.filter(a => a.title.length > 5);
+  } catch (error) {
+    console.error("Live News Fetch Failed", error);
     throw error;
   }
 };
