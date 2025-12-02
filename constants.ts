@@ -24,11 +24,9 @@ export const INITIAL_SIGNAL: GoldSignal = {
   gold_sentiment_score: 0,
   confidence: 0,
   summary: [
-    "System Initializing...",
-    "Awaiting Live Data Feed..."
+    "ANALYZING REAL-TIME DATA STREAMS...",
+    "CALCULATING SENTIMENT VECTORS..."
   ],
   key_drivers: [],
   top_articles: []
 };
-
-// Removed LIVE_NEWS_POOL as requested - data is now fetched live.

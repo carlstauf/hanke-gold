@@ -7,6 +7,9 @@ const ANALYSIS_SYSTEM_INSTRUCTION = `
 You are an expert quantitative researcher and commodities strategist specializing in Gold (XAU).
 Your task is to analyze a list of financial news headlines and produce a daily trading signal object.
 
+CRITICAL WEIGHTING RULE:
+Articles published within the last 12 hours (marked with timestamps like "2h ago", "10m ago") must be weighted 50% HIGHER in your sentiment calculation than older articles. The market moves on the absolute latest data.
+
 You must output JSON only.
 Analyze the provided headlines to determine:
 1. A Sentiment Score (-1.0 to 1.0) where -1 is extremely bearish for Gold, 1 is extremely bullish.
@@ -112,10 +115,14 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
     Prioritize these sources if available: Kitco, Mining.com, Reuters, Bloomberg, WSJ, FXStreet.
     Focus on: Spot Price moves, US Inflation/CPI/PCE, Fed Rate expectations, and Geopolitics.
     
+    You MUST sort them by date (Newest First).
+    
     For each article, strictly follow this single-line format:
-    TITLE ||| SOURCE ||| SUMMARY ||| IMPACT_SCORE
+    TITLE ||| SOURCE ||| SUMMARY ||| IMPACT_SCORE ||| TIME_PUBLISHED
     
     IMPACT_SCORE is a float between -1.0 (Bearish for Gold) and 1.0 (Bullish for Gold).
+    TIME_PUBLISHED should be relative, e.g., "14m ago", "2h ago", "yesterday".
+    
     Do not use markdown formatting or bullet points. Just the raw lines separated by newlines.
   `;
 
@@ -133,7 +140,13 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
     const articles: NewsArticle[] = lines.map((line, i) => {
-      const [title, source, summary, scoreStr] = line.split('|||').map(s => s.trim());
+      const parts = line.split('|||').map(s => s.trim());
+      // Handle variable length split in case LLM misses one field
+      const title = parts[0] || "News Alert";
+      const source = parts[1] || "Market Wire";
+      const summary = parts[2] || "Details currently unavailable.";
+      const scoreStr = parts[3] || "0";
+      const timeStr = parts[4] || "Today";
       
       let url = chunks[i]?.web?.uri;
       
@@ -143,17 +156,27 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
 
       return {
         id: `real-${Date.now()}-${i}`,
-        title: title || "News Alert",
-        source: source || "Market Wire",
-        summary: summary || "Details currently unavailable.",
+        title: title,
+        source: source,
+        summary: summary,
         impact_score: parseFloat(scoreStr) || 0,
-        timestamp: "Today",
+        timestamp: timeStr,
         url: url,
         tags: ["Live", "Real-Time"]
       };
     });
 
-    return articles.filter(a => a.title.length > 5);
+    // Helper to sort by recency (simple heuristic for "m ago" vs "h ago")
+    const sorted = articles.sort((a, b) => {
+      const getMins = (str: string) => {
+        if (str.includes('m ago')) return parseInt(str);
+        if (str.includes('h ago')) return parseInt(str) * 60;
+        return 9999;
+      };
+      return getMins(a.timestamp) - getMins(b.timestamp);
+    });
+
+    return sorted.filter(a => a.title.length > 5);
   } catch (error) {
     console.error("Live News Fetch Failed", error);
     throw error;
@@ -169,8 +192,8 @@ export const generateDailySignalFromLiveNews = async (apiKey: string): Promise<G
         throw new Error("No live news found");
     }
 
-    // 2. Prepare headlines for analysis
-    const headlines = articles.map(a => `${a.title} (Source: ${a.source}) - ${a.summary}`);
+    // 2. Prepare headlines for analysis - INCLUDE TIMESTAMP for weighting
+    const headlines = articles.map(a => `[${a.timestamp}] ${a.title} (Source: ${a.source}) - ${a.summary}`);
     
     // 3. Analyze using the core engine
     const signal = await analyzeHeadlinesWithGemini(headlines, apiKey);

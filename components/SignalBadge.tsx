@@ -1,13 +1,16 @@
+
 import React from 'react';
 import { SignalType } from '../types';
+import { Loader2 } from 'lucide-react';
 
 interface SignalBadgeProps {
   signal: SignalType;
   confidence: number;
   isSimulation?: boolean;
+  isLoading?: boolean;
 }
 
-const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, isSimulation }) => {
+const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, isSimulation, isLoading }) => {
   let colorClass = 'text-terminal-text';
   let barColor = 'bg-terminal-text';
   
@@ -35,9 +38,16 @@ const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, isSimulat
       </div>
 
       <div className="flex items-baseline mt-4 mb-8">
-         <h1 className={`text-6xl font-black tracking-tighter ${colorClass}`}>
-            {signal}
-         </h1>
+         {isLoading ? (
+            <div className="flex items-center gap-3">
+               <Loader2 className="animate-spin text-terminal-text opacity-50" size={32} />
+               <span className="text-xl font-mono text-terminal-text opacity-50 animate-pulse">PROCESSING...</span>
+            </div>
+         ) : (
+             <h1 className={`text-6xl font-black tracking-tighter ${colorClass}`}>
+                {signal}
+             </h1>
+         )}
       </div>
 
       <div className="mt-auto space-y-4">
@@ -46,12 +56,12 @@ const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, isSimulat
          <div>
             <div className="flex justify-between text-xs font-mono mb-1">
                <span className="text-terminal-text">MODEL CONFIDENCE</span>
-               <span className="text-terminal-highlight">{confidence}%</span>
+               <span className="text-terminal-highlight">{isLoading ? '--' : confidence}%</span>
             </div>
             <div className="h-2 w-full bg-terminal-border rounded-sm overflow-hidden">
                <div 
-                 className={`h-full ${barColor}`} 
-                 style={{ width: `${confidence}%` }}
+                 className={`h-full transition-all duration-1000 ${barColor}`} 
+                 style={{ width: `${isLoading ? 0 : confidence}%` }}
                />
             </div>
          </div>
@@ -60,11 +70,11 @@ const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, isSimulat
          <div className="grid grid-cols-2 gap-4 border-t border-terminal-border pt-4">
             <div>
                <div className="text-[10px] text-terminal-text font-mono uppercase">Trend Strength</div>
-               <div className="text-lg font-mono text-terminal-highlight">0.84</div>
+               <div className="text-lg font-mono text-terminal-highlight">{isLoading ? '...' : '0.84'}</div>
             </div>
             <div>
                <div className="text-[10px] text-terminal-text font-mono uppercase">Volatility</div>
-               <div className="text-lg font-mono text-terminal-highlight">12.4%</div>
+               <div className="text-lg font-mono text-terminal-highlight">{isLoading ? '...' : '12.4%'}</div>
             </div>
          </div>
 

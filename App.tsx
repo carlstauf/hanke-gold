@@ -20,10 +20,12 @@ const App: React.FC = () => {
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [priceHistory, setPriceHistory] = useState<HistoricalPoint[]>([]);
   const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [lastTickTime, setLastTickTime] = useState<string>("--:--:--");
 
   const [apiKey, setApiKey] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isBooting, setIsBooting] = useState(true); // Initial boot state
+  const [isBooting, setIsBooting] = useState(true); // Splash screen state
+  const [isSignalLoading, setIsSignalLoading] = useState(false); // Background data loading
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,33 +34,42 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // POLLER: Fetch Live Price from Yahoo every 60s
+  // POLLER: Fetch Live Price every 5s (High Frequency)
   useEffect(() => {
      const updatePrice = async () => {
         const price = await getLiveGoldPrice();
         if (price) {
            setLivePrice(price);
+           const now = new Date();
+           setLastTickTime(`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`);
         }
      };
 
      // Initial call
      updatePrice();
      
-     // Interval
-     const interval = setInterval(updatePrice, 60000);
+     // Interval 5s
+     const interval = setInterval(updatePrice, 5000);
      return () => clearInterval(interval);
   }, []);
 
-  // BOOT SEQUENCE: Fetch History & Analysis
+  // BOOT SEQUENCE: Splash Screen -> Dashboard -> Background Fetch
   useEffect(() => {
-    const bootSystem = async () => {
-        if (!apiKey) {
-            setIsBooting(false);
-            return;
-        }
+    // 1. Splash Screen Timer (Fixed 2.5s for aesthetics)
+    const timer = setTimeout(() => {
+        setIsBooting(false);
+    }, 2500);
 
+    return () => clearTimeout(timer);
+  }, []);
+
+  // BACKGROUND DATA FETCH (Triggered once API key is ready)
+  useEffect(() => {
+    const fetchData = async () => {
+        if (!apiKey) return;
+
+        setIsSignalLoading(true);
         try {
-            setIsBooting(true);
             // Parallel Fetch: History + Analysis
             const [history, signal] = await Promise.all([
                 fetchGoldPriceHistory(apiKey),
@@ -69,14 +80,16 @@ const App: React.FC = () => {
             setLiveSignalData(signal);
             setDisplaySignalData(signal);
         } catch (e: any) {
-            console.error("Boot failed:", e);
-            setError(`Failed to initialize: ${e.message || "Check API Key or Network"}`);
+            console.error("Background fetch failed:", e);
+            setError(`Data Init Failed: ${e.message || "Network Error"}`);
         } finally {
-            setIsBooting(false);
+            setIsSignalLoading(false);
         }
     };
 
-    bootSystem();
+    if (apiKey) {
+        fetchData();
+    }
   }, [apiKey]);
 
   // Combine history with live price for chart
@@ -140,7 +153,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-[10px] text-terminal-text">
                       <span>FEED_3 (KITCO)</span>
-                      <span className="text-signal-hold">SYNCING...</span>
+                      <span className="text-signal-buy animate-pulse">SYNCING...</span>
                   </div>
               </div>
           </div>
@@ -159,12 +172,12 @@ const App: React.FC = () => {
             </div>
             <span className="font-bold text-terminal-highlight tracking-tight">
                AuQUANT 
-               <span className="text-terminal-text font-normal opacity-50 ml-2">TERMINAL v3.0</span>
+               <span className="text-terminal-text font-normal opacity-50 ml-2">TERMINAL v3.1</span>
             </span>
           </div>
           <div className="h-4 w-[1px] bg-terminal-border"></div>
           <div className="flex items-center gap-6 text-xs font-mono">
-            <TickerItem symbol="XAU/USD" price={livePrice?.toFixed(2) || "LOADING..."} change="+0.00" />
+            <TickerItem symbol="XAU/USD" price={livePrice?.toFixed(2) || "WAITING..."} change={lastTickTime} isTime />
             <TickerItem symbol="DXY" price="104.20" change="-0.15" />
           </div>
         </div>
@@ -222,7 +235,12 @@ const App: React.FC = () => {
                 
                 {/* A. SIGNAL GAUGE (Top Left) */}
                 <div className="col-span-12 md:col-span-4 row-span-4 bg-terminal-dark relative">
-                   <SignalBadge signal={displaySignalData.signal} confidence={displaySignalData.confidence} isSimulation={isSimulationMode} />
+                   <SignalBadge 
+                     signal={displaySignalData.signal} 
+                     confidence={displaySignalData.confidence} 
+                     isSimulation={isSimulationMode}
+                     isLoading={isSignalLoading}
+                   />
                 </div>
 
                 {/* B. CHART (Top Right) */}
@@ -251,10 +269,10 @@ const App: React.FC = () => {
                 <div className="col-span-12 md:col-span-8 row-span-5 bg-terminal-dark flex flex-col">
                    <div className="px-3 py-2 border-b border-terminal-border bg-terminal-panel/50 flex justify-between items-center">
                       <span className="text-xs font-bold text-terminal-highlight">
-                         {isSimulationMode ? 'SYNTHETIC NEWS GENERATION' : 'INTELLIGENCE FEED'}
+                         {isSimulationMode ? 'SYNTHETIC NEWS GENERATION' : 'INTELLIGENCE FEED (SORTED: NEWEST)'}
                       </span>
                       <span className="text-[10px] font-mono text-terminal-text">
-                         {isSimulationMode ? 'OFFLINE SIM' : 'LIVE'}
+                         {isSimulationMode ? 'OFFLINE SIM' : 'LIVE CONNECTED'}
                       </span>
                    </div>
                    <div className="flex-1 overflow-hidden">
@@ -280,12 +298,20 @@ const App: React.FC = () => {
                 <div className="col-span-12 md:col-span-4 row-span-5 bg-terminal-panel flex flex-col p-4 border-l border-terminal-border">
                    <h3 className="text-xs font-mono text-terminal-text mb-4 uppercase">System Summary</h3>
                    <div className="space-y-4 font-mono text-xs">
-                      {displaySignalData.summary.map((point, idx) => (
-                        <div key={idx} className="flex gap-2">
-                           <span className="text-terminal-text opacity-50">{idx+1}.</span>
-                           <p className="text-terminal-highlight leading-relaxed">{point}</p>
+                      {isSignalLoading ? (
+                        <div className="flex flex-col gap-2 opacity-50 animate-pulse">
+                            <div className="h-2 bg-terminal-border w-3/4 rounded"></div>
+                            <div className="h-2 bg-terminal-border w-full rounded"></div>
+                            <div className="h-2 bg-terminal-border w-5/6 rounded"></div>
                         </div>
-                      ))}
+                      ) : (
+                        displaySignalData.summary.map((point, idx) => (
+                          <div key={idx} className="flex gap-2">
+                             <span className="text-terminal-text opacity-50">{idx+1}.</span>
+                             <p className="text-terminal-highlight leading-relaxed">{point}</p>
+                          </div>
+                        ))
+                      )}
                    </div>
                 </div>
              </div>
@@ -334,13 +360,16 @@ const NavIcon = ({ icon: Icon, active, onClick, tooltip }: any) => (
   </button>
 );
 
-const TickerItem = ({ symbol, price, change }: any) => {
-  const isPos = change.startsWith('+');
+const TickerItem = ({ symbol, price, change, isTime }: any) => {
+  const isPos = !isTime && change.startsWith('+');
+  const isNeg = !isTime && change.startsWith('-');
   return (
     <div className="flex gap-2">
       <span className="text-terminal-text">{symbol}</span>
       <span className="text-terminal-highlight">{price}</span>
-      <span className={isPos ? 'text-signal-buy' : 'text-signal-sell'}>{change}%</span>
+      <span className={isPos ? 'text-signal-buy' : isNeg ? 'text-signal-sell' : 'text-terminal-text opacity-50'}>
+        {change}
+      </span>
     </div>
   );
 }
