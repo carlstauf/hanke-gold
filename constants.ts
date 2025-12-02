@@ -1,20 +1,6 @@
 import { GoldSignal, HistoricalPoint, ShockEvent } from './types';
 
-export const MOCK_HISTORY: HistoricalPoint[] = Array.from({ length: 30 }, (_, i) => {
-  const date = new Date();
-  date.setDate(date.getDate() - (29 - i));
-  const basePrice = 2300;
-  const randomWalk = Math.sin(i * 0.5) * 50 + (Math.random() * 20 - 10);
-  
-  // Create some correlation between sentiment and price movement
-  const sentiment = Math.sin(i * 0.5 - 1) * 0.8 + (Math.random() * 0.4 - 0.2);
-  
-  return {
-    date: date.toISOString().split('T')[0],
-    price: Math.round(basePrice + randomWalk + (i * 2)),
-    sentiment: Number(sentiment.toFixed(2)),
-  };
-});
+export const MOCK_HISTORY: HistoricalPoint[] = [];
 
 export const SHOCK_EVENTS: ShockEvent[] = [
   { id: 'fed_pivot', label: 'FED EMERGENCY CUT', category: 'MACRO', impact_bias: 0.8 },

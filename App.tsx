@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, TerminalSquare, Radio, Database, X } from 'lucide-react';
+import { LayoutDashboard, TerminalSquare, Radio, Database, X, RotateCcw } from 'lucide-react';
 import SignalBadge from './components/SignalBadge';
 import FactorCard from './components/FactorCard';
 import HistoryChart from './components/HistoryChart';
@@ -11,7 +11,12 @@ import { generateScenarioReport } from './services/geminiService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [signalData, setSignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
+  
+  // State for Live Data (Source of Truth) vs Display Data (What is shown)
+  const [liveSignalData, setLiveSignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
+  const [displaySignalData, setDisplaySignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
+  const [isSimulationMode, setIsSimulationMode] = useState(false);
+
   const [apiKey, setApiKey] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +33,11 @@ const App: React.FC = () => {
     setError(null);
     try {
       const result = await generateScenarioReport(shocks, apiKey);
-      setSignalData(result.signal);
+      
+      // Update Display Data ONLY, keep Live Data safe
+      setDisplaySignalData(result.signal);
+      setIsSimulationMode(true);
+      
       // Automatically switch to dashboard to see results
       setActiveTab('dashboard');
     } catch (err: any) {
@@ -39,27 +48,44 @@ const App: React.FC = () => {
     }
   };
 
+  const handleExitSimulation = () => {
+    setDisplaySignalData(liveSignalData);
+    setIsSimulationMode(false);
+    setActiveTab('dashboard');
+  };
+
   return (
     <div className="h-screen w-screen bg-terminal-black flex flex-col font-sans overflow-hidden text-sm">
       
       {/* 1. TOP BAR: Global Status & Ticker */}
-      <header className="h-10 border-b border-terminal-border bg-terminal-dark flex items-center justify-between px-3 shrink-0">
+      <header className={`h-10 border-b flex items-center justify-between px-3 shrink-0 transition-colors duration-300 ${isSimulationMode ? 'bg-[#1e1b2e] border-indigo-900' : 'bg-terminal-dark border-terminal-border'}`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-signal-hold flex items-center justify-center rounded-sm">
+            <div className={`w-4 h-4 flex items-center justify-center rounded-sm ${isSimulationMode ? 'bg-indigo-500' : 'bg-signal-hold'}`}>
               <span className="text-[10px] font-bold text-black font-mono">Au</span>
             </div>
-            <span className="font-bold text-terminal-highlight tracking-tight">AuQUANT <span className="text-terminal-text font-normal opacity-50">TERMINAL v3.0</span></span>
+            <span className="font-bold text-terminal-highlight tracking-tight">
+               AuQUANT 
+               <span className="text-terminal-text font-normal opacity-50 ml-2">TERMINAL v3.0</span>
+            </span>
           </div>
           <div className="h-4 w-[1px] bg-terminal-border"></div>
           <div className="flex items-center gap-6 text-xs font-mono">
             <TickerItem symbol="XAU/USD" price="2,342.50" change="+0.45" />
             <TickerItem symbol="DXY" price="104.20" change="-0.15" />
-            <TickerItem symbol="US10Y" price="4.42" change="+0.05" />
           </div>
         </div>
 
         <div className="flex items-center gap-4">
+           {isSimulationMode && (
+              <button 
+                onClick={handleExitSimulation}
+                className="flex items-center gap-2 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold tracking-wider rounded-sm animate-pulse"
+              >
+                 <RotateCcw size={12} />
+                 EXIT SIMULATION - RETURN TO LIVE
+              </button>
+           )}
            <div className="flex items-center gap-2 text-xs font-mono">
              <span className={apiKey ? "text-signal-buy" : "text-signal-sell"}>●</span>
              <span>API: {apiKey ? 'CONNECTED' : 'DISCONNECTED'}</span>
@@ -91,21 +117,27 @@ const App: React.FC = () => {
              </div>
            )}
 
+           {/* SIMULATION WARNING OVERLAY */}
+           {isSimulationMode && activeTab === 'dashboard' && (
+              <div className="absolute top-0 left-0 right-0 bg-indigo-900/90 text-white text-center text-[10px] font-mono py-1 z-40 border-b border-indigo-500 tracking-widest">
+                 ⚠ SYNTHETIC SCENARIO ACTIVE - DATA IS HALLUCINATED ⚠
+              </div>
+           )}
+
            {activeTab === 'dashboard' && (
              <div className="grid grid-cols-12 grid-rows-12 h-full w-full gap-[1px] bg-terminal-border p-[1px]">
                 
                 {/* A. SIGNAL GAUGE (Top Left) */}
                 <div className="col-span-12 md:col-span-4 row-span-4 bg-terminal-dark relative">
-                   <SignalBadge signal={signalData.signal} confidence={signalData.confidence} />
+                   <SignalBadge signal={displaySignalData.signal} confidence={displaySignalData.confidence} isSimulation={isSimulationMode} />
                 </div>
 
                 {/* B. CHART (Top Right) */}
                 <div className="col-span-12 md:col-span-8 row-span-4 bg-terminal-dark p-1 flex flex-col">
                    <div className="flex justify-between items-center px-3 py-1 border-b border-terminal-border/50 mb-1">
-                      <span className="text-xs font-mono text-terminal-text">XAU/USD v SENTIMENT CORRELATION (1H)</span>
+                      <span className="text-xs font-mono text-terminal-text">XAU/USD INTRADAY PRICE ACTION</span>
                       <div className="flex gap-2 text-[10px] font-mono">
-                        <span className="text-signal-hold">PRICE</span>
-                        <span className="text-blue-400">SENTIMENT</span>
+                        <span className="text-signal-hold">SPOT PRICE</span>
                       </div>
                    </div>
                    <div className="flex-1">
@@ -115,7 +147,7 @@ const App: React.FC = () => {
 
                 {/* C. KEY DRIVERS (Middle Strip) */}
                 <div className="col-span-12 row-span-3 bg-terminal-black grid grid-cols-2 md:grid-cols-4 gap-[1px] bg-terminal-border">
-                   {signalData.key_drivers.map((driver, idx) => (
+                   {displaySignalData.key_drivers.map((driver, idx) => (
                       <div key={idx} className="bg-terminal-dark">
                          <FactorCard factor={driver} />
                       </div>
@@ -125,33 +157,42 @@ const App: React.FC = () => {
                 {/* D. NEWS & SUMMARY (Bottom) */}
                 <div className="col-span-12 md:col-span-8 row-span-5 bg-terminal-dark flex flex-col">
                    <div className="px-3 py-2 border-b border-terminal-border bg-terminal-panel/50 flex justify-between items-center">
-                      <span className="text-xs font-bold text-terminal-highlight">INTELLIGENCE FEED</span>
-                      <span className="text-[10px] font-mono text-terminal-text">LIVE</span>
+                      <span className="text-xs font-bold text-terminal-highlight">
+                         {isSimulationMode ? 'SYNTHETIC NEWS GENERATION' : 'INTELLIGENCE FEED'}
+                      </span>
+                      <span className="text-[10px] font-mono text-terminal-text">
+                         {isSimulationMode ? 'OFFLINE SIM' : 'LIVE'}
+                      </span>
                    </div>
                    <div className="flex-1 overflow-hidden">
-                      <LiveNewsFeed apiKey={apiKey} />
+                       {isSimulationMode ? (
+                          <div className="p-4 space-y-2 overflow-auto h-full">
+                             {displaySignalData.top_articles.map((art, i) => (
+                                <div key={i} className="border-b border-terminal-border pb-2 mb-2">
+                                   <div className="flex justify-between text-[10px] text-indigo-400 font-mono mb-1">
+                                      <span>{art.source}</span>
+                                      <span>{art.timestamp}</span>
+                                   </div>
+                                   <div className="text-sm text-terminal-highlight font-bold mb-1">{art.title}</div>
+                                   <div className="text-xs text-terminal-text opacity-70">{art.summary}</div>
+                                </div>
+                             ))}
+                          </div>
+                       ) : (
+                          <LiveNewsFeed apiKey={apiKey} />
+                       )}
                    </div>
                 </div>
 
                 <div className="col-span-12 md:col-span-4 row-span-5 bg-terminal-panel flex flex-col p-4 border-l border-terminal-border">
                    <h3 className="text-xs font-mono text-terminal-text mb-4 uppercase">System Summary</h3>
                    <div className="space-y-4 font-mono text-xs">
-                      {signalData.summary.map((point, idx) => (
+                      {displaySignalData.summary.map((point, idx) => (
                         <div key={idx} className="flex gap-2">
                            <span className="text-terminal-text opacity-50">{idx+1}.</span>
                            <p className="text-terminal-highlight leading-relaxed">{point}</p>
                         </div>
                       ))}
-                   </div>
-                   <div className="mt-auto pt-4 border-t border-terminal-border">
-                      <div className="flex justify-between text-xs font-mono text-terminal-text opacity-70">
-                        <span>MODEL</span>
-                        <span>GEMINI-PRO-QUANT-v1</span>
-                      </div>
-                      <div className="flex justify-between text-xs font-mono text-terminal-text opacity-70 mt-1">
-                        <span>LATENCY</span>
-                        <span>24ms</span>
-                      </div>
                    </div>
                 </div>
              </div>
