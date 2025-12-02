@@ -272,11 +272,21 @@ export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalP
     if (!apiKey) return [];
     
     const ai = new GoogleGenAI({ apiKey });
-    // Fetch last 14 days of history
+    
     const prompt = `
       Search for the daily closing price of Gold (XAU/USD) for the last 14 days.
-      Return a JSON array of objects with 'date' (YYYY-MM-DD) and 'price' (number).
-      Ensure the data is accurate real-world data.
+      
+      OUTPUT FORMAT:
+      You must return a JSON array inside a code block.
+      Example:
+      \`\`\`json
+      [
+        {"date": "2023-10-01", "price": 1850.50},
+        ...
+      ]
+      \`\`\`
+      
+      Ensure the data is accurate real-world data found via search.
       Order by date ascending.
     `;
 
@@ -286,25 +296,37 @@ export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalP
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            date: { type: Type.STRING },
-                            price: { type: Type.NUMBER }
-                        }
-                    }
-                }
+                // NOTE: responseMimeType and responseSchema CANNOT be used with tools in this API version
             }
         });
         
-        const data = JSON.parse(response.text || "[]");
-        // Add dummy sentiment for the chart visualization (random walk for demo)
+        const text = response.text || "[]";
+        
+        // Extract JSON from markdown code block if present
+        const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/) || [null, text];
+        let jsonStr = jsonMatch[1] || text;
+        
+        // clean up potentially messy string
+        jsonStr = jsonStr.trim();
+        if (jsonStr.startsWith('```json')) jsonStr = jsonStr.replace('```json', '').replace('```', '');
+        
+        let data = [];
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            console.warn("Failed to parse history JSON directly, trying to find array pattern");
+            const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+            if (arrayMatch) {
+                data = JSON.parse(arrayMatch[0]);
+            }
+        }
+
+        if (!Array.isArray(data)) return [];
+
         return data.map((d: any) => ({
-            ...d,
-            sentiment: 0 // Sentiment not available historically in this simple fetch
+            date: d.date,
+            price: d.price,
+            sentiment: 0 
         }));
     } catch (e) {
         console.error("History Fetch Failed", e);
