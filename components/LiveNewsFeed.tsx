@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { NewsArticle } from '../types';
 import { LIVE_NEWS_POOL } from '../constants';
 import { fetchLiveGoldNews } from '../services/geminiService';
@@ -8,10 +8,13 @@ interface LiveNewsFeedProps {
   apiKey?: string;
 }
 
+type FilterType = 'ALL' | 'BULLISH' | 'BEARISH' | 'SELL';
+
 const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
+  const [filter, setFilter] = useState<FilterType>('ALL');
   const poolIndex = useRef(0);
   const simulationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -70,16 +73,41 @@ const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
     };
   }, [apiKey]);
 
+  // Filtering Logic
+  const filteredArticles = articles.filter(a => {
+    if (filter === 'ALL') return true;
+    if (filter === 'BULLISH') return a.impact_score > 0;
+    if (filter === 'BEARISH' || filter === 'SELL') return a.impact_score < 0;
+    return true;
+  });
+
   return (
     <div className="h-full flex flex-col font-mono text-xs">
+       {/* Toolbar */}
        <div className="bg-terminal-dark border-b border-terminal-border flex justify-between px-3 py-1 items-center shrink-0">
-          <span className="text-terminal-text opacity-50 uppercase">Global Wire</span>
+          <div className="flex gap-2">
+             {(['ALL', 'BULLISH', 'SELL'] as FilterType[]).map((f) => (
+                <button
+                   key={f}
+                   onClick={() => setFilter(f)}
+                   className={`px-2 py-0.5 text-[10px] rounded-sm transition-colors ${
+                      filter === f 
+                      ? 'bg-terminal-highlight text-black font-bold' 
+                      : 'text-terminal-text hover:bg-terminal-border'
+                   }`}
+                >
+                   {f}
+                </button>
+             ))}
+          </div>
           {isRealData && (
              <button onClick={loadRealNews} disabled={loading} className="hover:text-terminal-highlight text-terminal-text">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''}/>
              </button>
           )}
        </div>
+
+       {/* Table */}
        <div className="flex-1 overflow-auto bg-terminal-black">
           <table className="w-full text-left border-collapse">
              <thead className="sticky top-0 bg-terminal-panel z-10 border-b border-terminal-border">
@@ -91,20 +119,24 @@ const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
                 </tr>
              </thead>
              <tbody className="divide-y divide-terminal-border/30">
-                {articles.map((article) => (
-                   <tr key={article.id} className="hover:bg-terminal-panel group cursor-pointer">
-                      <td className="py-2 px-3 text-terminal-text opacity-70">{article.timestamp}</td>
-                      <td className="py-2 px-3 text-terminal-highlight font-bold">{article.source}</td>
-                      <td className="py-2 px-3">
-                         <a href={article.url} target="_blank" rel="noopener noreferrer" className="block text-terminal-text hover:text-signal-hold hover:underline truncate max-w-[400px]">
-                            {article.title}
-                         </a>
-                      </td>
-                      <td className={`py-2 px-3 text-right font-bold ${article.impact_score > 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
-                         {article.impact_score > 0 ? '+' : ''}{article.impact_score}
-                      </td>
-                   </tr>
-                ))}
+                {filteredArticles.length === 0 ? (
+                   <tr><td colSpan={4} className="py-4 text-center opacity-50">No data matching filter</td></tr>
+                ) : (
+                  filteredArticles.map((article) => (
+                    <tr key={article.id} className="hover:bg-terminal-panel group cursor-pointer">
+                        <td className="py-2 px-3 text-terminal-text opacity-70">{article.timestamp}</td>
+                        <td className="py-2 px-3 text-terminal-highlight font-bold">{article.source}</td>
+                        <td className="py-2 px-3">
+                          <a href={article.url} target="_blank" rel="noopener noreferrer" className="block text-terminal-text hover:text-signal-hold hover:underline truncate max-w-[400px]">
+                              {article.title}
+                          </a>
+                        </td>
+                        <td className={`py-2 px-3 text-right font-bold ${article.impact_score > 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
+                          {article.impact_score > 0 ? '+' : ''}{article.impact_score}
+                        </td>
+                    </tr>
+                  ))
+                )}
              </tbody>
           </table>
        </div>

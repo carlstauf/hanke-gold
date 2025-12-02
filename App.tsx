@@ -7,7 +7,7 @@ import SimulationPanel from './components/SimulationPanel';
 import LiveNewsFeed from './components/LiveNewsFeed';
 import { GoldSignal } from './types';
 import { INITIAL_SIGNAL, MOCK_HISTORY } from './constants';
-import { generateScenarioReport, fetchLiveGoldNews } from './services/geminiService';
+import { generateScenarioReport } from './services/geminiService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -22,12 +22,12 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // New handler for the Scenario Generator
-  const handleScenarioRun = async (inputs: { inflation: number; usd: number; risk: number; rates: number }) => {
+  // Updated handler for the Scenario Generator (Now takes string array of shocks)
+  const handleScenarioRun = async (shocks: string[]) => {
     setIsAnalyzing(true);
     setError(null);
     try {
-      const result = await generateScenarioReport(inputs, apiKey);
+      const result = await generateScenarioReport(shocks, apiKey);
       setSignalData(result.signal);
       // Automatically switch to dashboard to see results
       setActiveTab('dashboard');

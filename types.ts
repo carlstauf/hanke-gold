@@ -35,3 +35,10 @@ export interface HistoricalPoint {
   sentiment: number;
   signal?: SignalType;
 }
+
+export interface ShockEvent {
+  id: string;
+  label: string;
+  category: 'MACRO' | 'GEOPOL' | 'MARKET' | 'COMMODITY';
+  impact_bias: number; // -1 (Bearish for Gold) to 1 (Bullish)
+}

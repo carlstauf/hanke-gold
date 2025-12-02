@@ -160,36 +160,25 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
 };
 
 export const generateScenarioReport = async (
-  inputs: { inflation: number; usd: number; risk: number; rates: number },
+  activeShocks: string[],
   apiKey: string
 ): Promise<{ headlines: string[], signal: GoldSignal }> => {
   if (!apiKey) throw new Error("API Key Required for Simulation");
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Convert numerical inputs (0-100) to qualitative descriptions
-  const getLevel = (val: number) => {
-    if (val < 20) return "Very Low / Dovish / Peace";
-    if (val < 40) return "Low / Weak / Stable";
-    if (val < 60) return "Neutral / Flat";
-    if (val < 80) return "High / Strong / Tense";
-    return "Extreme / Breakout / Conflict";
-  };
-
-  const scenarioDescription = `
-    - Inflation/CPI Data: ${getLevel(inputs.inflation)} (${inputs.inflation}%)
-    - USD Strength (DXY): ${getLevel(inputs.usd)} (${inputs.usd})
-    - Geopolitical Risk: ${getLevel(inputs.risk)} (${inputs.risk})
-    - Fed Interest Rates: ${getLevel(inputs.rates)} (${inputs.rates})
-  `;
+  const scenarioDescription = activeShocks.length > 0 
+    ? `The market is experiencing the following simultaneous events: ${activeShocks.join(', ')}.`
+    : `The market is currently quiet with no major shock events. Business as usual.`;
 
   const prompt = `
-    Act as a financial news simulator.
-    Scenario Parameters:
+    Act as a financial news simulator / market maker.
+    
+    SCENARIO CONTEXT:
     ${scenarioDescription}
 
-    Task 1: Generate 5 realistic, professional financial news headlines that would appear on Bloomberg/Reuters in this specific scenario.
-    Task 2: Generate a full GoldSignal object (JSON) analyzing these headlines.
+    Task 1: Generate 5 realistic, professional financial news headlines that would appear on Bloomberg/Reuters in this specific scenario. Ensure they reflect the interactions between these events (e.g. if Oil is up and Fed cuts rates, what happens to inflation expectation?).
+    Task 2: Generate a full GoldSignal object (JSON) analyzing these headlines, predicting the Gold (XAU) reaction.
 
     Output Format: JSON Object with keys: "headlines" (array of strings) and "signal" (GoldSignal object).
   `;
