@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { NewsArticle } from '../types';
-import { LIVE_NEWS_POOL } from '../constants';
 import { fetchLiveGoldNews } from '../services/geminiService';
+
+const LIVE_NEWS_POOL = [
+  { title: "Gold Rallies as Dollar Weakens Ahead of Fed Meeting", source: "Bloomberg", summary: "Spot gold rose 0.8% as the dollar index (DXY) slipped.", impact: 0.6, url: "#" },
+  { title: "Central Banks Continue Record Gold Buying Spree", source: "World Gold Council", summary: "Emerging market central banks added 45 tonnes to reserves.", impact: 0.8, url: "#" },
+  { title: "Yields Spike on Hot CPI Print, Gold Tumbles", source: "Reuters", summary: "US 10Y Treasury yield hit 4.5%, weighing on non-yielding bullion.", impact: -0.7, url: "#" },
+  { title: "Geopolitical Tensions Escalate in Middle East", source: "Al Jazeera", summary: "Safe haven flows boost precious metals amid conflict fears.", impact: 0.5, url: "#" },
+  { title: "China Import Data Shows Weak Consumer Demand", source: "Caixin", summary: "Jewelry fabrication demand down 15% YoY.", impact: -0.4, url: "#" },
+  { title: "Silver Outperforms Gold as Industrial Demand Picks Up", source: "Kitco", summary: "Gold/Silver ratio tightens as manufacturing sector rebounds.", impact: 0.2, url: "#" },
+  { title: "ECB Signals Potential Rate Cut in June", source: "Financial Times", summary: "Lower Eurozone rates could weaken EUR but support global liquidity.", impact: 0.4, url: "#" },
+  { title: "India Raises Import Duty on Gold to 15%", source: "Times of India", summary: "Physical demand expected to contract in Q3.", impact: -0.5, url: "#" },
+];
 
 interface LiveNewsFeedProps {
   apiKey?: string;

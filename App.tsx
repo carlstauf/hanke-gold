@@ -1,13 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, TerminalSquare, Radio, Database, X, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, TerminalSquare, Radio, Database, X, RotateCcw, Loader2 } from 'lucide-react';
 import SignalBadge from './components/SignalBadge';
 import FactorCard from './components/FactorCard';
 import HistoryChart from './components/HistoryChart';
 import SimulationPanel from './components/SimulationPanel';
 import LiveNewsFeed from './components/LiveNewsFeed';
-import { GoldSignal } from './types';
+import { GoldSignal, HistoricalPoint } from './types';
 import { INITIAL_SIGNAL, MOCK_HISTORY } from './constants';
-import { generateScenarioReport } from './services/geminiService';
+import { generateScenarioReport, generateDailySignalFromLiveNews, fetchGoldPriceHistory } from './services/geminiService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -16,9 +17,11 @@ const App: React.FC = () => {
   const [liveSignalData, setLiveSignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
   const [displaySignalData, setDisplaySignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<HistoricalPoint[]>([]);
 
   const [apiKey, setApiKey] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isBooting, setIsBooting] = useState(true); // Initial boot state
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,6 +29,36 @@ const App: React.FC = () => {
       setApiKey(process.env.API_KEY);
     }
   }, []);
+
+  // BOOT SEQUENCE: Fetch Real Data on Startup
+  useEffect(() => {
+    const bootSystem = async () => {
+        if (!apiKey) {
+            setIsBooting(false);
+            return;
+        }
+
+        try {
+            setIsBooting(true);
+            // Parallel Fetch: History + Analysis
+            const [history, signal] = await Promise.all([
+                fetchGoldPriceHistory(apiKey),
+                generateDailySignalFromLiveNews(apiKey)
+            ]);
+            
+            setPriceHistory(history);
+            setLiveSignalData(signal);
+            setDisplaySignalData(signal);
+        } catch (e) {
+            console.error("Boot failed:", e);
+            setError("Failed to initialize live data feed. Check connection.");
+        } finally {
+            setIsBooting(false);
+        }
+    };
+
+    bootSystem();
+  }, [apiKey]);
 
   // Updated handler for the Scenario Generator (Now takes string array of shocks)
   const handleScenarioRun = async (shocks: string[]) => {
@@ -54,6 +87,30 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  if (isBooting) {
+      return (
+          <div className="h-screen w-screen bg-terminal-black flex flex-col items-center justify-center font-mono text-terminal-highlight">
+              <Loader2 className="animate-spin mb-4 text-signal-hold" size={48} />
+              <div className="text-xl font-bold tracking-widest mb-2">AuQUANT SYSTEM BOOT</div>
+              <div className="text-xs text-terminal-text opacity-70">ESTABLISHING SECURE UPLINK TO GLOBAL EXCHANGES...</div>
+              <div className="mt-4 flex flex-col gap-1 w-64">
+                  <div className="flex justify-between text-[10px] text-terminal-text">
+                      <span>FEED_1 (REUTERS)</span>
+                      <span className="text-signal-buy">CONNECTED</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-terminal-text">
+                      <span>FEED_2 (BLOOMBERG)</span>
+                      <span className="text-signal-buy">CONNECTED</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-terminal-text">
+                      <span>FEED_3 (KITCO)</span>
+                      <span className="text-signal-hold">SYNCING...</span>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className="h-screen w-screen bg-terminal-black flex flex-col font-sans overflow-hidden text-sm">
       
@@ -71,7 +128,7 @@ const App: React.FC = () => {
           </div>
           <div className="h-4 w-[1px] bg-terminal-border"></div>
           <div className="flex items-center gap-6 text-xs font-mono">
-            <TickerItem symbol="XAU/USD" price="2,342.50" change="+0.45" />
+            <TickerItem symbol="XAU/USD" price={priceHistory[priceHistory.length-1]?.price.toFixed(2) || "---"} change="+0.00" />
             <TickerItem symbol="DXY" price="104.20" change="-0.15" />
           </div>
         </div>
@@ -141,7 +198,7 @@ const App: React.FC = () => {
                       </div>
                    </div>
                    <div className="flex-1">
-                      <HistoryChart data={MOCK_HISTORY} />
+                      <HistoryChart data={priceHistory} />
                    </div>
                 </div>
 

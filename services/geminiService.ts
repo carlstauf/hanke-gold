@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { GoldSignal, NewsArticle } from "../types";
+import { GoldSignal, NewsArticle, HistoricalPoint } from "../types";
 
 // This prompts the LLM to act as the "Sentiment Engine" described in the python prompt.
 const ANALYSIS_SYSTEM_INSTRUCTION = `
@@ -159,6 +160,33 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
   }
 };
 
+export const generateDailySignalFromLiveNews = async (apiKey: string): Promise<GoldSignal> => {
+  try {
+    // 1. Fetch Real News first
+    const articles = await fetchLiveGoldNews(apiKey);
+    
+    if (articles.length === 0) {
+        throw new Error("No live news found");
+    }
+
+    // 2. Prepare headlines for analysis
+    const headlines = articles.map(a => `${a.title} (Source: ${a.source}) - ${a.summary}`);
+    
+    // 3. Analyze using the core engine
+    const signal = await analyzeHeadlinesWithGemini(headlines, apiKey);
+    
+    // 4. Merge the REAL fetched articles (with valid URLs) into the signal object
+    // replacing the hallucinated/aggregated ones from the prompt
+    return {
+        ...signal,
+        top_articles: articles.slice(0, 8)
+    };
+  } catch (error) {
+    console.error("Pipeline Failed:", error);
+    throw error;
+  }
+};
+
 export const generateScenarioReport = async (
   activeShocks: string[],
   apiKey: string
@@ -239,3 +267,47 @@ export const generateScenarioReport = async (
   const text = response.text || "{}";
   return JSON.parse(text);
 };
+
+export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalPoint[]> => {
+    if (!apiKey) return [];
+    
+    const ai = new GoogleGenAI({ apiKey });
+    // Fetch last 14 days of history
+    const prompt = `
+      Search for the daily closing price of Gold (XAU/USD) for the last 14 days.
+      Return a JSON array of objects with 'date' (YYYY-MM-DD) and 'price' (number).
+      Ensure the data is accurate real-world data.
+      Order by date ascending.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            date: { type: Type.STRING },
+                            price: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            }
+        });
+        
+        const data = JSON.parse(response.text || "[]");
+        // Add dummy sentiment for the chart visualization (random walk for demo)
+        return data.map((d: any) => ({
+            ...d,
+            sentiment: 0 // Sentiment not available historically in this simple fetch
+        }));
+    } catch (e) {
+        console.error("History Fetch Failed", e);
+        return [];
+    }
+}
