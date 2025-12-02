@@ -1,43 +1,45 @@
 import React from 'react';
 import { FactorScore } from '../types';
-import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 
 interface FactorCardProps {
   factor: FactorScore;
 }
 
 const FactorCard: React.FC<FactorCardProps> = ({ factor }) => {
-  const isBullish = factor.score > 0.1;
-  const isBearish = factor.score < -0.1;
+  const scorePct = Math.min(Math.max((factor.score + 1) / 2 * 100, 0), 100);
   
+  let colorClass = 'text-terminal-text';
+  if (factor.score > 0.1) colorClass = 'text-signal-buy';
+  if (factor.score < -0.1) colorClass = 'text-signal-sell';
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-slate-700 transition-colors">
-      <div className="flex justify-between items-start mb-2">
-        <h3 className="text-slate-400 font-medium text-sm">{factor.factor}</h3>
-        {isBullish && <ArrowUpRight className="text-green-500" size={18} />}
-        {isBearish && <ArrowDownRight className="text-red-500" size={18} />}
-        {!isBullish && !isBearish && <Minus className="text-slate-500" size={18} />}
+    <div className="h-full p-4 flex flex-col hover:bg-terminal-panel transition-colors group relative">
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[10px] font-mono text-terminal-text">
+        {factor.impact.toFixed(2)} IMP
       </div>
+
+      <h3 className="text-[10px] font-mono uppercase text-terminal-text opacity-70 mb-2">{factor.factor}</h3>
       
-      <div className="flex items-end gap-2 mb-3">
-        <span className={`text-2xl font-bold ${
-          isBullish ? 'text-green-400' : isBearish ? 'text-red-400' : 'text-slate-300'
-        }`}>
-          {factor.score > 0 ? '+' : ''}{factor.score.toFixed(2)}
-        </span>
-        <span className="text-xs text-slate-500 mb-1 font-mono">IMPACT</span>
+      <div className={`text-2xl font-bold font-mono mb-3 ${colorClass}`}>
+         {factor.score > 0 ? '+' : ''}{factor.score.toFixed(2)}
       </div>
 
-      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-3">
-        <div 
-          className={`h-full ${isBullish ? 'bg-green-500' : isBearish ? 'bg-red-500' : 'bg-slate-500'}`}
-          style={{ width: `${Math.abs(factor.score) * 100}%` }}
-        />
+      <div className="mt-auto">
+         {/* Center-zero sparkline */}
+         <div className="h-1 w-full bg-terminal-border relative mb-2">
+            <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-terminal-text opacity-20 z-10" />
+            <div 
+               className={`absolute h-full transition-all duration-300 ${factor.score > 0 ? 'bg-signal-buy' : 'bg-signal-sell'}`}
+               style={{
+                  left: factor.score < 0 ? `${50 - Math.abs(factor.score) * 50}%` : '50%',
+                  width: `${Math.abs(factor.score) * 50}%`
+               }}
+            />
+         </div>
+         <p className="text-[10px] text-terminal-text leading-tight opacity-50 line-clamp-2">
+            {factor.explanation}
+         </p>
       </div>
-
-      <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800 pt-2">
-        {factor.explanation}
-      </p>
     </div>
   );
 };

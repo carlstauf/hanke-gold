@@ -56,14 +56,6 @@ export const INITIAL_SIGNAL: GoldSignal = {
   ]
 };
 
-export const DEFAULT_HEADLINES = [
-  "US CPI rises 0.4% in March, beating expectations of 0.3%",
-  "Goldman Sachs raises year-end gold target to $2700",
-  "Dollar index hits 5-month high as traders trim rate cut bets",
-  "China's central bank pauses gold purchases for first time in 18 months",
-  "Mining strike in Peru disrupts copper and gold output at major facility"
-];
-
 export const LIVE_NEWS_POOL = [
   { source: "Reuters", title: "Gold dips as dollar strengthens ahead of Fed minutes", summary: "Spot gold fell 0.3% to $2,320.15 per ounce.", impact: -0.3, url: "https://www.google.com/search?q=Gold+dips+as+dollar+strengthens+ahead+of+Fed+minutes" },
   { source: "Bloomberg", title: "China's gold consumption rises 6% in Q1", summary: "Jewelry and investment demand remains strong despite high prices.", impact: 0.5, url: "https://www.google.com/search?q=China+gold+consumption+rises" },

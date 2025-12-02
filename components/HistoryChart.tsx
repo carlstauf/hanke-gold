@@ -1,14 +1,13 @@
 import React from 'react';
 import {
   ResponsiveContainer,
-  ComposedChart,
+  LineChart,
   Line,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend
+  ReferenceLine
 } from 'recharts';
 import { HistoricalPoint } from '../types';
 
@@ -19,14 +18,14 @@ interface HistoryChartProps {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900 border border-slate-700 p-3 rounded shadow-xl">
-        <p className="text-slate-300 text-sm font-mono mb-2">{label}</p>
-        <p className="text-gold-400 text-sm font-bold">
-          Price: ${payload[0].value}
-        </p>
-        <p className="text-blue-400 text-sm font-bold">
-          Sentiment: {payload[1].value}
-        </p>
+      <div className="bg-terminal-black border border-terminal-border p-2 shadow-xl">
+        <p className="text-terminal-text text-[10px] font-mono mb-1">{label}</p>
+        <div className="flex items-center gap-3">
+          <span className="text-signal-hold text-xs font-bold font-mono">${payload[0].value}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-blue-400 text-xs font-bold font-mono">Sent: {payload[1].value}</span>
+        </div>
       </div>
     );
   }
@@ -35,62 +34,57 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
   return (
-    <div className="h-[350px] w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data}>
-          <defs>
-            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EAB308" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#EAB308" stopOpacity={0}/>
-            </linearGradient>
-            <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+        <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <CartesianGrid stroke="#27272a" strokeDasharray="1 0" vertical={true} horizontal={true} />
           <XAxis 
             dataKey="date" 
-            stroke="#94a3b8" 
-            fontSize={12} 
-            tickFormatter={(val) => val.slice(5)}
-            tickMargin={10}
+            stroke="#52525b" 
+            fontSize={10} 
+            tickFormatter={(val) => val.slice(8)} // Just day
+            tickMargin={5}
+            axisLine={false}
+            tickLine={false}
+            interval={5}
           />
           <YAxis 
             yAxisId="left" 
-            stroke="#EAB308" 
-            fontSize={12} 
-            domain={['dataMin - 50', 'dataMax + 50']}
-            tickFormatter={(val) => `$${val}`}
+            stroke="#52525b" 
+            fontSize={10} 
+            domain={['auto', 'auto']}
+            axisLine={false}
+            tickLine={false}
           />
           <YAxis 
             yAxisId="right" 
             orientation="right" 
-            stroke="#3b82f6" 
-            fontSize={12} 
-            domain={[-1.2, 1.2]} 
+            stroke="#52525b" 
+            fontSize={10} 
+            domain={[-1, 1]} 
+            hide
           />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend />
-          <Area 
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#52525b', strokeWidth: 1, strokeDasharray: '3 3' }} />
+          <Line 
             yAxisId="left"
-            type="monotone" 
+            type="linear" // Sharp lines for technical look
             dataKey="price" 
-            name="Gold Price (USD)"
-            stroke="#EAB308" 
-            fillOpacity={1} 
-            fill="url(#colorPrice)" 
+            stroke="#fbbf24" 
+            strokeWidth={1.5}
+            dot={false}
+            activeDot={{ r: 4, fill: '#fbbf24' }}
           />
           <Line 
             yAxisId="right"
             type="step" 
             dataKey="sentiment" 
-            name="Sentiment Score"
             stroke="#3b82f6" 
-            strokeWidth={2}
+            strokeWidth={1}
             dot={false}
+            opacity={0.6}
           />
-        </ComposedChart>
+          <ReferenceLine yAxisId="right" y={0} stroke="#27272a" />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

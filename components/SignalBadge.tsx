@@ -1,47 +1,70 @@
 import React from 'react';
 import { SignalType } from '../types';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface SignalBadgeProps {
   signal: SignalType;
   confidence: number;
-  className?: string;
 }
 
-const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence, className = '' }) => {
-  let colorClass = '';
-  let Icon = Minus;
-
-  switch (signal) {
-    case 'BUY':
-      colorClass = 'bg-green-500/20 text-green-400 border-green-500/50';
-      Icon = TrendingUp;
-      break;
-    case 'SELL':
-      colorClass = 'bg-red-500/20 text-red-400 border-red-500/50';
-      Icon = TrendingDown;
-      break;
-    case 'HOLD':
-      colorClass = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
-      Icon = Minus;
-      break;
+const SignalBadge: React.FC<SignalBadgeProps> = ({ signal, confidence }) => {
+  let colorClass = 'text-terminal-text';
+  let barColor = 'bg-terminal-text';
+  
+  if (signal === 'BUY') {
+    colorClass = 'text-signal-buy';
+    barColor = 'bg-signal-buy';
+  } else if (signal === 'SELL') {
+    colorClass = 'text-signal-sell';
+    barColor = 'bg-signal-sell';
+  } else {
+    colorClass = 'text-signal-hold';
+    barColor = 'bg-signal-hold';
   }
 
   return (
-    <div className={`flex flex-col items-center justify-center p-6 rounded-xl border-2 ${colorClass} ${className}`}>
-      <div className="text-sm font-mono tracking-widest opacity-80 mb-2">DAILY SIGNAL</div>
-      <div className="flex items-center gap-3">
-        <Icon size={48} strokeWidth={3} />
-        <span className="text-6xl font-black tracking-tighter">{signal}</span>
-      </div>
-      <div className="mt-4 flex items-center gap-2">
-        <div className="h-2 w-24 bg-slate-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-current transition-all duration-500" 
-            style={{ width: `${confidence}%` }}
-          />
+    <div className="h-full w-full p-6 flex flex-col justify-between">
+      
+      <div className="flex justify-between items-start">
+        <h2 className="text-xs font-mono uppercase text-terminal-text opacity-70">Daily Signal</h2>
+        <div className="flex gap-1">
+           {[1,2,3].map(i => <div key={i} className={`w-1 h-1 rounded-full ${i===1 ? 'bg-terminal-highlight animate-pulse' : 'bg-terminal-border'}`} />)}
         </div>
-        <span className="text-xs font-mono font-bold">{confidence}% CONFIDENCE</span>
+      </div>
+
+      <div className="flex items-baseline mt-4 mb-8">
+         <h1 className={`text-6xl font-black tracking-tighter ${colorClass}`}>
+            {signal}
+         </h1>
+      </div>
+
+      <div className="mt-auto space-y-4">
+         
+         {/* Confidence Metric */}
+         <div>
+            <div className="flex justify-between text-xs font-mono mb-1">
+               <span className="text-terminal-text">MODEL CONFIDENCE</span>
+               <span className="text-terminal-highlight">{confidence}%</span>
+            </div>
+            <div className="h-2 w-full bg-terminal-border rounded-sm overflow-hidden">
+               <div 
+                 className={`h-full ${barColor}`} 
+                 style={{ width: `${confidence}%` }}
+               />
+            </div>
+         </div>
+
+         {/* Stats Grid */}
+         <div className="grid grid-cols-2 gap-4 border-t border-terminal-border pt-4">
+            <div>
+               <div className="text-[10px] text-terminal-text font-mono uppercase">Trend Strength</div>
+               <div className="text-lg font-mono text-terminal-highlight">0.84</div>
+            </div>
+            <div>
+               <div className="text-[10px] text-terminal-text font-mono uppercase">Volatility</div>
+               <div className="text-lg font-mono text-terminal-highlight">12.4%</div>
+            </div>
+         </div>
+
       </div>
     </div>
   );

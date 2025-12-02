@@ -106,10 +106,10 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
 
   const ai = new GoogleGenAI({ apiKey });
   
-  // We use googleSearch to get real data. We cannot use JSON responseMimeType with search tools easily in the same call 
-  // without losing grounding chunks sometimes, so we parse text manually for better reliability with tools.
   const prompt = `
-    Find 6 very recent real-time financial news headlines (from the last 24 hours) about Gold (XAU), US Inflation, Fed Policy, or Geopolitics.
+    Find 6 very recent real-time financial news headlines (from the last 24 hours) affecting Gold (XAU).
+    Prioritize these sources if available: Kitco, Mining.com, Reuters, Bloomberg, WSJ, FXStreet.
+    Focus on: Spot Price moves, US Inflation/CPI/PCE, Fed Rate expectations, and Geopolitics.
     
     For each article, strictly follow this single-line format:
     TITLE ||| SOURCE ||| SUMMARY ||| IMPACT_SCORE
@@ -134,12 +134,9 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
     const articles: NewsArticle[] = lines.map((line, i) => {
       const [title, source, summary, scoreStr] = line.split('|||').map(s => s.trim());
       
-      // Try to find a URL from grounding chunks. 
-      // Chunks are usually ordered by relevance or citation. We map index i if available, else fallback.
       let url = chunks[i]?.web?.uri;
       
       if (!url) {
-        // Fallback: Google Search Link
         url = `https://www.google.com/search?q=${encodeURIComponent(title + " " + source)}`;
       }
 
@@ -160,4 +157,96 @@ export const fetchLiveGoldNews = async (apiKey: string): Promise<NewsArticle[]> 
     console.error("Live News Fetch Failed", error);
     throw error;
   }
+};
+
+export const generateScenarioReport = async (
+  inputs: { inflation: number; usd: number; risk: number; rates: number },
+  apiKey: string
+): Promise<{ headlines: string[], signal: GoldSignal }> => {
+  if (!apiKey) throw new Error("API Key Required for Simulation");
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  // Convert numerical inputs (0-100) to qualitative descriptions
+  const getLevel = (val: number) => {
+    if (val < 20) return "Very Low / Dovish / Peace";
+    if (val < 40) return "Low / Weak / Stable";
+    if (val < 60) return "Neutral / Flat";
+    if (val < 80) return "High / Strong / Tense";
+    return "Extreme / Breakout / Conflict";
+  };
+
+  const scenarioDescription = `
+    - Inflation/CPI Data: ${getLevel(inputs.inflation)} (${inputs.inflation}%)
+    - USD Strength (DXY): ${getLevel(inputs.usd)} (${inputs.usd})
+    - Geopolitical Risk: ${getLevel(inputs.risk)} (${inputs.risk})
+    - Fed Interest Rates: ${getLevel(inputs.rates)} (${inputs.rates})
+  `;
+
+  const prompt = `
+    Act as a financial news simulator.
+    Scenario Parameters:
+    ${scenarioDescription}
+
+    Task 1: Generate 5 realistic, professional financial news headlines that would appear on Bloomberg/Reuters in this specific scenario.
+    Task 2: Generate a full GoldSignal object (JSON) analyzing these headlines.
+
+    Output Format: JSON Object with keys: "headlines" (array of strings) and "signal" (GoldSignal object).
+  `;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          headlines: { type: Type.ARRAY, items: { type: Type.STRING } },
+          signal: {
+            type: Type.OBJECT,
+            properties: {
+              date: { type: Type.STRING },
+              signal: { type: Type.STRING, enum: ["BUY", "SELL", "HOLD"] },
+              gold_sentiment_score: { type: Type.NUMBER },
+              confidence: { type: Type.INTEGER },
+              summary: { type: Type.ARRAY, items: { type: Type.STRING } },
+              key_drivers: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    factor: { type: Type.STRING },
+                    direction: { type: Type.STRING },
+                    impact: { type: Type.NUMBER },
+                    score: { type: Type.NUMBER },
+                    explanation: { type: Type.STRING }
+                  }
+                }
+              },
+              top_articles: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    source: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    url: { type: Type.STRING },
+                    timestamp: { type: Type.STRING },
+                    impact_score: { type: Type.NUMBER },
+                    summary: { type: Type.STRING },
+                    tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const text = response.text || "{}";
+  return JSON.parse(text);
 };
