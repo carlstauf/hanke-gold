@@ -277,7 +277,7 @@ export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalP
       Search for the daily closing price of Gold (XAU/USD) for the last 14 days.
       
       OUTPUT FORMAT:
-      You must return a JSON array inside a code block.
+      You must return a JSON array inside a markdown code block (json).
       Example:
       \`\`\`json
       [
@@ -288,6 +288,7 @@ export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalP
       
       Ensure the data is accurate real-world data found via search.
       Order by date ascending.
+      DO NOT INCLUDE EXPLANATORY TEXT. ONLY THE JSON BLOCK.
     `;
 
     try {
@@ -296,36 +297,37 @@ export const fetchGoldPriceHistory = async (apiKey: string): Promise<HistoricalP
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                // NOTE: responseMimeType and responseSchema CANNOT be used with tools in this API version
+                // REMOVED responseMimeType: "application/json" and schema
+                // as they are incompatible with GoogleSearch in this API version
             }
         });
         
         const text = response.text || "[]";
         
-        // Extract JSON from markdown code block if present
-        const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/) || [null, text];
-        let jsonStr = jsonMatch[1] || text;
+        // Manual JSON Extraction from Markdown
+        let jsonStr = "";
+        const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
         
-        // clean up potentially messy string
-        jsonStr = jsonStr.trim();
-        if (jsonStr.startsWith('```json')) jsonStr = jsonStr.replace('```json', '').replace('```', '');
-        
-        let data = [];
-        try {
-            data = JSON.parse(jsonStr);
-        } catch (e) {
-            console.warn("Failed to parse history JSON directly, trying to find array pattern");
-            const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[1];
+        } else {
+             // Fallback: try to find the array start/end
+            const arrayMatch = text.match(/\[[\s\S]*\]/);
             if (arrayMatch) {
-                data = JSON.parse(arrayMatch[0]);
+                jsonStr = arrayMatch[0];
+            } else {
+                console.warn("No JSON block found in history response", text);
+                return [];
             }
         }
+
+        const data = JSON.parse(jsonStr);
 
         if (!Array.isArray(data)) return [];
 
         return data.map((d: any) => ({
             date: d.date,
-            price: d.price,
+            price: typeof d.price === 'string' ? parseFloat(d.price.replace(/,/g, '')) : d.price,
             sentiment: 0 
         }));
     } catch (e) {

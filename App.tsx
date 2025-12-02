@@ -7,8 +7,9 @@ import HistoryChart from './components/HistoryChart';
 import SimulationPanel from './components/SimulationPanel';
 import LiveNewsFeed from './components/LiveNewsFeed';
 import { GoldSignal, HistoricalPoint } from './types';
-import { INITIAL_SIGNAL, MOCK_HISTORY } from './constants';
+import { INITIAL_SIGNAL } from './constants';
 import { generateScenarioReport, generateDailySignalFromLiveNews, fetchGoldPriceHistory } from './services/geminiService';
+import { getLiveGoldPrice } from './services/priceService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -18,6 +19,7 @@ const App: React.FC = () => {
   const [displaySignalData, setDisplaySignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [priceHistory, setPriceHistory] = useState<HistoricalPoint[]>([]);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
 
   const [apiKey, setApiKey] = useState<string>("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -30,7 +32,24 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // BOOT SEQUENCE: Fetch Real Data on Startup
+  // POLLER: Fetch Live Price from Yahoo every 60s
+  useEffect(() => {
+     const updatePrice = async () => {
+        const price = await getLiveGoldPrice();
+        if (price) {
+           setLivePrice(price);
+        }
+     };
+
+     // Initial call
+     updatePrice();
+     
+     // Interval
+     const interval = setInterval(updatePrice, 60000);
+     return () => clearInterval(interval);
+  }, []);
+
+  // BOOT SEQUENCE: Fetch History & Analysis
   useEffect(() => {
     const bootSystem = async () => {
         if (!apiKey) {
@@ -49,9 +68,9 @@ const App: React.FC = () => {
             setPriceHistory(history);
             setLiveSignalData(signal);
             setDisplaySignalData(signal);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Boot failed:", e);
-            setError("Failed to initialize live data feed. Check connection.");
+            setError(`Failed to initialize: ${e.message || "Check API Key or Network"}`);
         } finally {
             setIsBooting(false);
         }
@@ -59,6 +78,23 @@ const App: React.FC = () => {
 
     bootSystem();
   }, [apiKey]);
+
+  // Combine history with live price for chart
+  const combinedHistory = React.useMemo(() => {
+     if (!livePrice) return priceHistory;
+     // Only append if it's a new day or just to show current
+     const today = new Date().toISOString().split('T')[0];
+     const lastPoint = priceHistory[priceHistory.length - 1];
+     
+     if (lastPoint && lastPoint.date === today) {
+        // Update last point
+        return [...priceHistory.slice(0, -1), { ...lastPoint, price: livePrice }];
+     } else {
+        // Append new point
+        return [...priceHistory, { date: "LIVE", price: livePrice, sentiment: 0 }];
+     }
+  }, [priceHistory, livePrice]);
+
 
   // Updated handler for the Scenario Generator (Now takes string array of shocks)
   const handleScenarioRun = async (shocks: string[]) => {
@@ -128,7 +164,7 @@ const App: React.FC = () => {
           </div>
           <div className="h-4 w-[1px] bg-terminal-border"></div>
           <div className="flex items-center gap-6 text-xs font-mono">
-            <TickerItem symbol="XAU/USD" price={priceHistory[priceHistory.length-1]?.price.toFixed(2) || "---"} change="+0.00" />
+            <TickerItem symbol="XAU/USD" price={livePrice?.toFixed(2) || "LOADING..."} change="+0.00" />
             <TickerItem symbol="DXY" price="104.20" change="-0.15" />
           </div>
         </div>
@@ -198,7 +234,7 @@ const App: React.FC = () => {
                       </div>
                    </div>
                    <div className="flex-1">
-                      <HistoryChart data={priceHistory} />
+                      <HistoryChart data={combinedHistory} />
                    </div>
                 </div>
 

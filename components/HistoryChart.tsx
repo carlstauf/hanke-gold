@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   ResponsiveContainer,
@@ -21,7 +22,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <div className="bg-terminal-black border border-terminal-border p-2 shadow-xl">
         <p className="text-terminal-text text-[10px] font-mono mb-1">{label}</p>
         <div className="flex items-center gap-3">
-          <span className="text-signal-hold text-sm font-bold font-mono">${payload[0].value}</span>
+          <span className="text-signal-hold text-sm font-bold font-mono">${payload[0].value.toFixed(2)}</span>
         </div>
       </div>
     );
@@ -34,8 +35,8 @@ const HistoryChart: React.FC<HistoryChartProps> = ({ data }) => {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center border border-terminal-border/20 border-dashed bg-terminal-dark/50">
          <WifiOff className="text-terminal-text opacity-20 mb-2" size={24} />
-         <span className="text-xs font-mono text-terminal-text opacity-50">NO MARKET DATA FEED</span>
-         <span className="text-[10px] font-mono text-terminal-text opacity-30 mt-1">Awaiting tick stream...</span>
+         <span className="text-xs font-mono text-terminal-text opacity-50">INITIALIZING FEED...</span>
+         <span className="text-[10px] font-mono text-terminal-text opacity-30 mt-1">Connecting to Global Tick Stream</span>
       </div>
     );
   }
