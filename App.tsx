@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, TerminalSquare, Radio, Database, X, RotateCcw, Loader2 } from 'lucide-react';
+import { LayoutDashboard, TerminalSquare, Radio, Database, X, RotateCcw, Loader2, TrendingUp, TrendingDown, Clock } from 'lucide-react';
 import SignalBadge from './components/SignalBadge';
 import FactorCard from './components/FactorCard';
-import HistoryChart from './components/HistoryChart';
 import SimulationPanel from './components/SimulationPanel';
 import LiveNewsFeed from './components/LiveNewsFeed';
 import { GoldSignal, HistoricalPoint } from './types';
@@ -92,23 +91,6 @@ const App: React.FC = () => {
     }
   }, [apiKey]);
 
-  // Combine history with live price for chart
-  const combinedHistory = React.useMemo(() => {
-     if (!livePrice) return priceHistory;
-     // Only append if it's a new day or just to show current
-     const today = new Date().toISOString().split('T')[0];
-     const lastPoint = priceHistory[priceHistory.length - 1];
-     
-     if (lastPoint && lastPoint.date === today) {
-        // Update last point
-        return [...priceHistory.slice(0, -1), { ...lastPoint, price: livePrice }];
-     } else {
-        // Append new point
-        return [...priceHistory, { date: "LIVE", price: livePrice, sentiment: 0 }];
-     }
-  }, [priceHistory, livePrice]);
-
-
   // Updated handler for the Scenario Generator (Now takes string array of shocks)
   const handleScenarioRun = async (shocks: string[]) => {
     setIsAnalyzing(true);
@@ -135,6 +117,20 @@ const App: React.FC = () => {
     setIsSimulationMode(false);
     setActiveTab('dashboard');
   };
+
+  // Calculate Price Metrics
+  const priceMetrics = React.useMemo(() => {
+     if (!livePrice || priceHistory.length === 0) return { change: 0, percent: 0, prev: 0 };
+     
+     // Logic: Find the most recent "Close" that isn't the live price itself.
+     // Usually priceHistory contains last 14 days closes.
+     const prevClose = priceHistory[priceHistory.length - 1].price;
+     const change = livePrice - prevClose;
+     const percent = (change / prevClose) * 100;
+     
+     return { change, percent, prev: prevClose };
+  }, [livePrice, priceHistory]);
+
 
   if (isBooting) {
       return (
@@ -234,7 +230,7 @@ const App: React.FC = () => {
              <div className="grid grid-cols-12 grid-rows-12 h-full w-full gap-[1px] bg-terminal-border p-[1px]">
                 
                 {/* A. SIGNAL GAUGE (Top Left) */}
-                <div className="col-span-12 md:col-span-4 row-span-4 bg-terminal-dark relative">
+                <div className="col-span-12 md:col-span-6 row-span-4 bg-terminal-dark relative">
                    <SignalBadge 
                      signal={displaySignalData.signal} 
                      confidence={displaySignalData.confidence} 
@@ -243,16 +239,43 @@ const App: React.FC = () => {
                    />
                 </div>
 
-                {/* B. CHART (Top Right) */}
-                <div className="col-span-12 md:col-span-8 row-span-4 bg-terminal-dark p-1 flex flex-col">
-                   <div className="flex justify-between items-center px-3 py-1 border-b border-terminal-border/50 mb-1">
-                      <span className="text-xs font-mono text-terminal-text">XAU/USD INTRADAY PRICE ACTION</span>
-                      <div className="flex gap-2 text-[10px] font-mono">
-                        <span className="text-signal-hold">SPOT PRICE</span>
+                {/* B. PRICE DISPLAY (Top Right) - REPLACED CHART WITH BIG TEXT */}
+                <div className="col-span-12 md:col-span-6 row-span-4 bg-terminal-dark p-6 flex flex-col justify-between">
+                   <div className="flex justify-between items-start">
+                      <div>
+                          <h2 className="text-xs font-mono text-terminal-text uppercase opacity-70 mb-1">Live Spot Gold</h2>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-signal-buy rounded-full animate-pulse"></span>
+                            <span className="text-[10px] font-mono text-signal-buy tracking-wider">MARKET ACTIVE</span>
+                          </div>
+                      </div>
+                      <div className="text-right">
+                          <h3 className="text-xs font-mono text-terminal-text opacity-50">24H CHANGE</h3>
+                          <div className={`text-xl font-mono font-bold flex items-center justify-end gap-1 ${priceMetrics.change >= 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
+                              {priceMetrics.change >= 0 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
+                              {priceMetrics.change >= 0 ? '+' : ''}{priceMetrics.change.toFixed(2)} ({priceMetrics.percent.toFixed(2)}%)
+                          </div>
                       </div>
                    </div>
-                   <div className="flex-1">
-                      <HistoryChart data={combinedHistory} />
+
+                   <div className="flex items-baseline gap-2 mt-2">
+                       <span className="text-terminal-text text-4xl font-light">$</span>
+                       {/* HUGE PRICE DISPLAY */}
+                       <span className={`text-7xl md:text-8xl font-black tracking-tighter text-terminal-highlight tabular-nums leading-none`}>
+                           {livePrice ? Math.floor(livePrice) : "----"}
+                           <span className="text-4xl text-terminal-text opacity-50">.{livePrice ? (livePrice % 1).toFixed(2).substring(2) : "00"}</span>
+                       </span>
+                   </div>
+
+                   <div className="flex justify-between items-end mt-4">
+                       <div className="flex flex-col">
+                           <span className="text-[10px] font-mono text-terminal-text opacity-50">PREVIOUS CLOSE</span>
+                           <span className="text-sm font-mono text-terminal-text">${priceMetrics.prev.toFixed(2)}</span>
+                       </div>
+                       <div className="flex items-center gap-1 text-[10px] font-mono text-terminal-text opacity-30">
+                           <Clock size={10} />
+                           UPDATED: {lastTickTime}
+                       </div>
                    </div>
                 </div>
 
