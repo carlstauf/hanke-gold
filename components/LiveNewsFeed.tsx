@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { NewsArticle } from '../types';
@@ -16,11 +17,12 @@ const LIVE_NEWS_POOL = [
 
 interface LiveNewsFeedProps {
   apiKey?: string;
+  externalArticles?: NewsArticle[];
 }
 
 type FilterType = 'ALL' | 'BULLISH' | 'BEARISH' | 'SELL';
 
-const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
+const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey, externalArticles }) => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
@@ -44,9 +46,20 @@ const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
   };
 
   useEffect(() => {
-    if (apiKey) {
+    // Priority 1: Use External Articles passed from parent (avoids duplicate API calls)
+    if (externalArticles && externalArticles.length > 0) {
+        setArticles(externalArticles);
+        setIsRealData(true);
+        if (simulationInterval.current) clearInterval(simulationInterval.current);
+        return;
+    }
+
+    // Priority 2: Fetch internally if we have a key but no data passed down
+    // (Note: In the current App structure, this usually won't run on boot, protecting rate limits)
+    if (apiKey && (!externalArticles || externalArticles.length === 0)) {
       loadRealNews();
-    } else {
+    } else if (!apiKey) {
+      // Priority 3: Simulation Mode
       setIsRealData(false);
       const initial = LIVE_NEWS_POOL.slice(0, 5).map((item, i) => ({
         ...item,
@@ -81,7 +94,7 @@ const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
     return () => {
       if (simulationInterval.current) clearInterval(simulationInterval.current);
     };
-  }, [apiKey]);
+  }, [apiKey, externalArticles]);
 
   // Filtering Logic
   const filteredArticles = articles.filter(a => {
@@ -110,7 +123,7 @@ const LiveNewsFeed: React.FC<LiveNewsFeedProps> = ({ apiKey }) => {
                 </button>
              ))}
           </div>
-          {isRealData && (
+          {isRealData && !externalArticles && (
              <button onClick={loadRealNews} disabled={loading} className="hover:text-terminal-highlight text-terminal-text">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''}/>
              </button>

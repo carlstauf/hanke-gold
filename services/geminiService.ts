@@ -2,6 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GoldSignal, NewsArticle, HistoricalPoint } from "../types";
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // This prompts the LLM to act as the "Sentiment Engine" described in the python prompt.
 const ANALYSIS_SYSTEM_INSTRUCTION = `
 You are an expert quantitative researcher and commodities strategist specializing in Gold (XAU).
@@ -195,6 +197,9 @@ export const generateDailySignalFromLiveNews = async (apiKey: string): Promise<G
     // 2. Prepare headlines for analysis - INCLUDE TIMESTAMP for weighting
     const headlines = articles.map(a => `[${a.timestamp}] ${a.title} (Source: ${a.source}) - ${a.summary}`);
     
+    // Rate limit prevention: Wait a bit before hitting the Analysis endpoint
+    await delay(1000);
+
     // 3. Analyze using the core engine
     const signal = await analyzeHeadlinesWithGemini(headlines, apiKey);
     

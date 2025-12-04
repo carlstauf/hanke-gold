@@ -8,7 +8,7 @@ import LiveNewsFeed from './components/LiveNewsFeed';
 import { GoldSignal, HistoricalPoint } from './types';
 import { INITIAL_SIGNAL } from './constants';
 import { generateScenarioReport, generateDailySignalFromLiveNews, fetchGoldPriceHistory } from './services/geminiService';
-import { getLiveGoldPrice } from './services/priceService';
+import { getLiveGoldPrice, PriceData } from './services/priceService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -18,7 +18,9 @@ const App: React.FC = () => {
   const [displaySignalData, setDisplaySignalData] = useState<GoldSignal>(INITIAL_SIGNAL);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [priceHistory, setPriceHistory] = useState<HistoricalPoint[]>([]);
-  const [livePrice, setLivePrice] = useState<number | null>(null);
+  
+  // Rich Price Data State
+  const [tickerData, setTickerData] = useState<PriceData | null>(null);
   const [lastTickTime, setLastTickTime] = useState<string>("--:--:--");
 
   const [apiKey, setApiKey] = useState<string>("");
@@ -36,9 +38,9 @@ const App: React.FC = () => {
   // POLLER: Fetch Live Price every 5s (High Frequency)
   useEffect(() => {
      const updatePrice = async () => {
-        const price = await getLiveGoldPrice();
-        if (price) {
-           setLivePrice(price);
+        const data = await getLiveGoldPrice();
+        if (data) {
+           setTickerData(data);
            const now = new Date();
            setLastTickTime(`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`);
         }
@@ -54,7 +56,6 @@ const App: React.FC = () => {
 
   // BOOT SEQUENCE: Splash Screen -> Dashboard -> Background Fetch
   useEffect(() => {
-    // 1. Splash Screen Timer (Fixed 2.5s for aesthetics)
     const timer = setTimeout(() => {
         setIsBooting(false);
     }, 2500);
@@ -69,15 +70,19 @@ const App: React.FC = () => {
 
         setIsSignalLoading(true);
         try {
-            // Parallel Fetch: History + Analysis
-            const [history, signal] = await Promise.all([
-                fetchGoldPriceHistory(apiKey),
-                generateDailySignalFromLiveNews(apiKey)
-            ]);
-            
-            setPriceHistory(history);
+            // SEQUENTIAL FETCH to avoid 429 Resource Exhausted errors
+            // 1. Fetch Signal (News + Analysis) - High Priority
+            const signal = await generateDailySignalFromLiveNews(apiKey);
             setLiveSignalData(signal);
             setDisplaySignalData(signal);
+            
+            // Artificial delay to respect rate limits
+            await new Promise(r => setTimeout(r, 2000));
+
+            // 2. Fetch History - Lower Priority
+            const history = await fetchGoldPriceHistory(apiKey);
+            setPriceHistory(history);
+
         } catch (e: any) {
             console.error("Background fetch failed:", e);
             setError(`Data Init Failed: ${e.message || "Network Error"}`);
@@ -91,18 +96,13 @@ const App: React.FC = () => {
     }
   }, [apiKey]);
 
-  // Updated handler for the Scenario Generator (Now takes string array of shocks)
   const handleScenarioRun = async (shocks: string[]) => {
     setIsAnalyzing(true);
     setError(null);
     try {
       const result = await generateScenarioReport(shocks, apiKey);
-      
-      // Update Display Data ONLY, keep Live Data safe
       setDisplaySignalData(result.signal);
       setIsSimulationMode(true);
-      
-      // Automatically switch to dashboard to see results
       setActiveTab('dashboard');
     } catch (err: any) {
       console.error(err);
@@ -118,18 +118,39 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // Calculate Price Metrics
-  const priceMetrics = React.useMemo(() => {
-     if (!livePrice || priceHistory.length === 0) return { change: 0, percent: 0, prev: 0 };
+  // Determine which change metric to show
+  // If the live feed has valid change data (from Kraken/Binance), use it (Priority 1)
+  // Otherwise, try to calculate from history (Priority 2)
+  const displayMetrics = React.useMemo(() => {
+     if (tickerData && tickerData.change !== 0) {
+         return {
+             change: tickerData.change,
+             percent: tickerData.changePercent,
+             price: tickerData.price,
+             prev: tickerData.price - tickerData.change
+         };
+     }
      
-     // Logic: Find the most recent "Close" that isn't the live price itself.
-     // Usually priceHistory contains last 14 days closes.
-     const prevClose = priceHistory[priceHistory.length - 1].price;
-     const change = livePrice - prevClose;
-     const percent = (change / prevClose) * 100;
-     
-     return { change, percent, prev: prevClose };
-  }, [livePrice, priceHistory]);
+     // Fallback to history calculation
+     if (tickerData && priceHistory.length > 0) {
+         const prevClose = priceHistory[priceHistory.length - 1].price;
+         const change = tickerData.price - prevClose;
+         const percent = (change / prevClose) * 100;
+         return {
+             change,
+             percent,
+             price: tickerData.price,
+             prev: prevClose
+         };
+     }
+
+     return { 
+         change: 0, 
+         percent: 0, 
+         price: tickerData?.price || 0, 
+         prev: 0 
+     };
+  }, [tickerData, priceHistory]);
 
 
   if (isBooting) {
@@ -159,7 +180,7 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-screen bg-terminal-black flex flex-col font-sans overflow-hidden text-sm">
       
-      {/* 1. TOP BAR: Global Status & Ticker */}
+      {/* 1. TOP BAR */}
       <header className={`h-10 border-b flex items-center justify-between px-3 shrink-0 transition-colors duration-300 ${isSimulationMode ? 'bg-[#1e1b2e] border-indigo-900' : 'bg-terminal-dark border-terminal-border'}`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -173,7 +194,7 @@ const App: React.FC = () => {
           </div>
           <div className="h-4 w-[1px] bg-terminal-border"></div>
           <div className="flex items-center gap-6 text-xs font-mono">
-            <TickerItem symbol="XAU/USD" price={livePrice?.toFixed(2) || "WAITING..."} change={lastTickTime} isTime />
+            <TickerItem symbol="XAU/USD" price={tickerData?.price.toFixed(2) || "WAITING..."} change={lastTickTime} isTime />
             <TickerItem symbol="DXY" price="104.20" change="-0.15" />
           </div>
         </div>
@@ -195,10 +216,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. MAIN LAYOUT: Split Pane */}
+      {/* 2. MAIN LAYOUT */}
       <div className="flex flex-1 overflow-hidden">
         
-        {/* SIDEBAR: Utility & Nav */}
+        {/* SIDEBAR */}
         <aside className="w-12 border-r border-terminal-border bg-terminal-panel flex flex-col items-center py-4 gap-1 shrink-0 z-20">
            <NavIcon icon={LayoutDashboard} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} tooltip="Overview" />
            <NavIcon icon={TerminalSquare} active={activeTab === 'engine'} onClick={() => setActiveTab('engine')} tooltip="Stress Test Lab" />
@@ -211,7 +232,6 @@ const App: React.FC = () => {
         {/* CONTENT AREA */}
         <main className="flex-1 overflow-hidden bg-terminal-black relative">
            
-           {/* ERROR TOAST */}
            {error && (
              <div className="absolute top-0 w-full bg-signal-sell/10 border-b border-signal-sell/20 text-signal-sell px-4 py-2 flex justify-between items-center z-50">
                <span className="font-mono text-xs">ERR: {error}</span>
@@ -219,7 +239,6 @@ const App: React.FC = () => {
              </div>
            )}
 
-           {/* SIMULATION WARNING OVERLAY */}
            {isSimulationMode && activeTab === 'dashboard' && (
               <div className="absolute top-0 left-0 right-0 bg-indigo-900/90 text-white text-center text-[10px] font-mono py-1 z-40 border-b border-indigo-500 tracking-widest">
                  ⚠ SYNTHETIC SCENARIO ACTIVE - DATA IS HALLUCINATED ⚠
@@ -239,7 +258,7 @@ const App: React.FC = () => {
                    />
                 </div>
 
-                {/* B. PRICE DISPLAY (Top Right) - REPLACED CHART WITH BIG TEXT */}
+                {/* B. PRICE DISPLAY (Top Right) */}
                 <div className="col-span-12 md:col-span-6 row-span-4 bg-terminal-dark p-6 flex flex-col justify-between">
                    <div className="flex justify-between items-start">
                       <div>
@@ -251,26 +270,33 @@ const App: React.FC = () => {
                       </div>
                       <div className="text-right">
                           <h3 className="text-xs font-mono text-terminal-text opacity-50">24H CHANGE</h3>
-                          <div className={`text-xl font-mono font-bold flex items-center justify-end gap-1 ${priceMetrics.change >= 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
-                              {priceMetrics.change >= 0 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
-                              {priceMetrics.change >= 0 ? '+' : ''}{priceMetrics.change.toFixed(2)} ({priceMetrics.percent.toFixed(2)}%)
+                          <div className={`text-xl font-mono font-bold flex items-center justify-end gap-1 ${displayMetrics.change >= 0 ? 'text-signal-buy' : 'text-signal-sell'}`}>
+                              {tickerData === null ? (
+                                  <span className="text-terminal-text opacity-50">--</span>
+                              ) : (
+                                <>
+                                  {displayMetrics.change >= 0 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
+                                  {displayMetrics.change >= 0 ? '+' : ''}{displayMetrics.change.toFixed(2)} ({displayMetrics.percent.toFixed(2)}%)
+                                </>
+                              )}
                           </div>
                       </div>
                    </div>
 
                    <div className="flex items-baseline gap-2 mt-2">
                        <span className="text-terminal-text text-4xl font-light">$</span>
-                       {/* HUGE PRICE DISPLAY */}
                        <span className={`text-7xl md:text-8xl font-black tracking-tighter text-terminal-highlight tabular-nums leading-none`}>
-                           {livePrice ? Math.floor(livePrice) : "----"}
-                           <span className="text-4xl text-terminal-text opacity-50">.{livePrice ? (livePrice % 1).toFixed(2).substring(2) : "00"}</span>
+                           {displayMetrics.price > 0 ? Math.floor(displayMetrics.price) : "----"}
+                           <span className="text-4xl text-terminal-text opacity-50">.{displayMetrics.price > 0 ? (displayMetrics.price % 1).toFixed(2).substring(2) : "00"}</span>
                        </span>
                    </div>
 
                    <div className="flex justify-between items-end mt-4">
                        <div className="flex flex-col">
                            <span className="text-[10px] font-mono text-terminal-text opacity-50">PREVIOUS CLOSE</span>
-                           <span className="text-sm font-mono text-terminal-text">${priceMetrics.prev.toFixed(2)}</span>
+                           <span className="text-sm font-mono text-terminal-text">
+                              {displayMetrics.prev > 0 ? `$${displayMetrics.prev.toFixed(2)}` : "----"}
+                           </span>
                        </div>
                        <div className="flex items-center gap-1 text-[10px] font-mono text-terminal-text opacity-30">
                            <Clock size={10} />
@@ -313,7 +339,10 @@ const App: React.FC = () => {
                              ))}
                           </div>
                        ) : (
-                          <LiveNewsFeed apiKey={apiKey} />
+                          <LiveNewsFeed 
+                            apiKey={apiKey} 
+                            externalArticles={displaySignalData.top_articles} 
+                          />
                        )}
                    </div>
                 </div>
@@ -361,7 +390,7 @@ const App: React.FC = () => {
                 <div className="h-10 border-b border-terminal-border flex items-center px-4 bg-terminal-panel">
                   <span className="font-mono text-xs font-bold text-terminal-highlight">FULL SPECTRUM NEWS WIRE</span>
                 </div>
-                <LiveNewsFeed apiKey={apiKey} />
+                <LiveNewsFeed apiKey={apiKey} externalArticles={displaySignalData.top_articles} />
              </div>
            )}
 
